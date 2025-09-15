@@ -26,6 +26,7 @@ async function saveDevice(deviceId, role, familyCode, subscription){
   if (familyCode) await redis.sadd(`family:${familyCode}`, deviceId);
 }
 
+/*
 async function getDevice(deviceId){
   const data = await redis.hgetall(`device:${deviceId}`);
   if (!data || !data.subscription) return null;
@@ -35,6 +36,33 @@ async function getDevice(deviceId){
     subscription: JSON.parse(data.subscription)
   };
 }
+*/
+
+async function getDevice(deviceId){
+  const data = await redis.hgetall(`device:${deviceId}`);
+  if (!data || !data.subscription) return null;
+
+  let sub = data.subscription;
+  try {
+    if (typeof sub === 'string') {
+      if (sub.trim().startsWith('{') || sub.trim().startsWith('[')) {
+        sub = JSON.parse(sub);
+      } else {
+        await deleteDevice(deviceId);
+        return null;
+      }
+    } else if (typeof sub !== 'object' || sub === null) {
+      await deleteDevice(deviceId);
+      return null;
+    }
+  } catch {
+    await deleteDevice(deviceId);
+    return null;
+  }
+
+  return { role: data.role, familyCode: data.familyCode || '', subscription: sub };
+}
+
 
 async function getFamilyDeviceIds(familyCode){
   if (!familyCode) return [];
@@ -201,6 +229,7 @@ app.post('/api/test-push', async (req,res)=>{
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, ()=>console.log('push server on :' + PORT));
+
 
 
 
