@@ -10,6 +10,18 @@ webpush.setVapidDetails(
 
 const app = express();
 app.use(cors());
+
+// 簡易APIキー保護（環境変数 API_KEY が設定されているときだけ有効）
+app.use((req,res,next)=>{
+  const required = !!process.env.API_KEY;
+  if (required && req.path.startsWith('/api/')) {
+    if (req.get('x-api-key') !== process.env.API_KEY) {
+      return res.status(401).json({ok:false});
+    }
+  }
+  next();
+});
+
 app.use(express.json());
 
 // 端末ごとの購読情報を保存（学習用にメモリでOK）
@@ -76,4 +88,5 @@ app.post('/api/test-push', async (req,res)=>{
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, ()=>console.log('push server on :' + PORT));
+
 
