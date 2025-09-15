@@ -12,16 +12,54 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// 端末ごとの購読情報を保存（学習用にメモリでOK）
+/**
+ * subs: Map<deviceId, { role: 'self'|'family', familyCode?: string|null, subscription: PushSubscription }>
+ */
 const subs = new Map();
+
 
 app.get('/', (_,res)=>res.send('ok'));
 
 app.post('/api/save-subscription', (req,res)=>{
-  const {deviceId, role, subscription} = req.body || {};
-  if (!deviceId || !subscription) return res.status(400).json({ok:false});
-  subs.set(deviceId, {role: role || 'self', subscription});
+  const { deviceId, role, familyCode, subscription } = req.body || {};
+  if (!deviceId || !subscription) return res.status(400).json({ok:false, error:'bad request'});
+  subs.set(deviceId, { role: role || 'self', familyCode: familyCode || null, subscription });
   res.json({ok:true});
 });
+
+app.post('/api/focus-result', async (req,res)=>{
+  const { deviceId, familyCode, title, body, url } = req.body || {};
+  if (!deviceId || !title) return res.status(400).json({ok:false, error:'bad request'});
+
+  // 送信対象を収集
+  const targets = [];
+  for (const [id, v] of subs.entries()){
+    // 本人（deviceId一致 & role=self）
+    if (id === deviceId && v.role === 'self') targets.push(v.subscription);
+    // 家族（familyCode一致 & role=family）
+    if (familyCode && v.familyCode && v.familyCode === familyCode && v.role === 'family') {
+      targets.push(v.subscription);
+    }
+  }
+
+  const payload = JSON.stringify({ title, body, url });
+  try{
+    await Promise.all(targets.map(s => webpush.sendNotification(s, payload).catch(e=>{
+      // 410/404 は購読無効なので捨て候補（簡易）
+      if (e?.statusCode === 410 || e?.statusCode === 404) {
+        // 実運用は subs からも削除するロジックを追加
+      } else {
+        throw e;
+      }
+    })));
+    res.json({ok:true, sent: targets.length});
+  }catch(e){
+    console.error(e.body || e);
+    res.status(500).json({ok:false});
+  }
+});
+
 
 app.post('/api/test-push', async (req,res)=>{
   const {deviceId, title, body} = req.body || {};
@@ -38,3 +76,4 @@ app.post('/api/test-push', async (req,res)=>{
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, ()=>console.log('push server on :' + PORT));
+
