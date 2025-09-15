@@ -4,12 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-      "start": "node server.js"
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@upstash/redis": "^1.35.3",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "web-push": "^3.6.7"
